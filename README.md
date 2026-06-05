@@ -111,17 +111,11 @@ CLI flags:
 - `--max-depth N` — iterative-deepening depth cap per branch (default 3)
 - `--out PATH` — output file (default `reports/<timestamp>-<slug>.json`)
 
-Example output (truncated from a real run):
+Example terminal output (Raft consensus query):
 
-```
-## Distributed Locking with Redis
+![CLI output — execution panel, synthesis preview with inline citations, and self-graded confidence assessment](docs/cli-output.png)
 
-Redis provides a lightweight distributed locking mechanism centered on the SET
-command. The Redis SET command is atomic [1], and when combined with the NX
-and EX options [2], it forms the foundation of distributed locks. The NX
-option ensures the command only succeeds if the key does not already exist
-[2], while EX sets an expiration in seconds [2]...
-```
+> The third panel — *Research Quality Confidence Assessment* — is the agent grading its own coverage per sub-question, naming the specific gaps it couldn't fill from the retrieved sources. Full report structure (summary, all sources, sub-question tree, claims, contradictions) is in [`reports/sample-redlock-report.json`](reports/sample-redlock-report.json).
 
 ---
 
