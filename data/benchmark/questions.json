@@ -1,0 +1,146 @@
+[
+  {
+    "id": "q001",
+    "category": "recent_events",
+    "question": "What were the main outcomes of COP30 regarding fossil fuel commitments?",
+    "reference_answer": "[VERIFY] COP30 was held in Belem, Brazil in November 2025. Reporting indicated the final agreement did NOT include an explicit roadmap to transition away from fossil fuels, despite a push by a large bloc of countries for one, which was a major point of contention. A separate voluntary roadmap initiative was floated outside the core text. CONFIRM the exact final-text language and any voluntary mechanisms before trusting this entry.",
+    "key_claims": [
+      "[VERIFY] COP30 took place in Belem, Brazil in November 2025.",
+      "[VERIFY] The final COP30 agreement did not include a binding roadmap to transition away from fossil fuels.",
+      "[VERIFY] A bloc of 80+ countries pushed for an explicit fossil-fuel transition roadmap that did not make the final text."
+    ],
+    "gold_sources": [],
+    "notes": "Tests recency handling (post-cutoff) and ability to disambiguate similar summits. ALL facts post-date training; must be verified against real coverage before use."
+  },
+  {
+    "id": "q002",
+    "category": "recent_events",
+    "question": "What is the current status of the EU AI Act's enforcement provisions as of mid-2026?",
+    "reference_answer": "[VERIFY] The EU AI Act entered into force in August 2024 with a staged application timeline: prohibited-practice bans applied first (early 2025), and obligations for general-purpose AI models and high-risk systems phase in across 2025-2027. By mid-2026 a further tranche of obligations should be active. CONFIRM exactly which provisions are enforceable as of mid-2026 and any delays/amendments before use.",
+    "key_claims": [
+      "[VERIFY] The EU AI Act entered into force in August 2024.",
+      "[VERIFY] Bans on prohibited AI practices became applicable in February 2025.",
+      "[VERIFY] General-purpose AI model obligations began applying in August 2025."
+    ],
+    "gold_sources": [],
+    "notes": "Tests recency on a staged regulatory timeline. Earlier milestones are pre-cutoff and more reliable; the mid-2026 status is the part that needs fresh search. Verify the staging dates."
+  },
+  {
+    "id": "q003",
+    "category": "recent_events",
+    "question": "Which model topped the LMArena (Chatbot Arena) leaderboard most recently, and what was notable about it?",
+    "reference_answer": "[VERIFY] This is intentionally fast-moving; the leaderboard leader changes frequently. A correct answer must name the current top model with its provider and cite a dated source, and should note the answer is time-sensitive. DO NOT hardcode a leader — this entry tests whether the agent fetches fresh data and timestamps it. Verify against the live leaderboard at eval time.",
+    "key_claims": [
+      "[VERIFY] Names a specific current top-ranked model with its provider.",
+      "Acknowledges the leaderboard is time-sensitive / cites a dated source."
+    ],
+    "gold_sources": [
+      "https://lmarena.ai/leaderboard"
+    ],
+    "notes": "Tests the agent's core advantage: pulling fresh data a non-searching baseline cannot. The second key_claim (calibration about time-sensitivity) is stable and checkable regardless of who currently leads."
+  },
+  {
+    "id": "q004",
+    "category": "technical_depth",
+    "question": "What is the Redlock algorithm, how does it work, and what are its main criticisms?",
+    "reference_answer": "Redlock is a fault-tolerant distributed locking algorithm for Redis, designed by Salvatore Sanfilippo, that addresses the failure of single-instance locks by requiring a client to acquire the lock on a majority (quorum, N/2+1) of N independent Redis instances. To acquire, a client generates a unique token and sends SET key value NX PX ttl to each instance; the lock is held only if a quorum is acquired within the TTL window. It is criticized most prominently by Martin Kleppmann, who argues it is 'neither fish nor fowl' — too heavyweight for efficiency locks yet not safe enough for correctness locks — and is vulnerable to clock skew, network partitions, and GC pauses that can let two clients hold the same lock.",
+    "key_claims": [
+      "Redlock requires acquiring the lock on a majority (N/2+1 quorum) of N independent Redis instances.",
+      "To acquire a lock, the client generates a unique token and sends a SET key value NX PX ttl command to each instance.",
+      "The lock is only valid if the quorum is acquired within the TTL window (elapsed time must be less than the TTL).",
+      "Martin Kleppmann criticized Redlock as 'neither fish nor fowl' — unnecessarily heavyweight for efficiency locks but not safe enough for correctness locks.",
+      "A GC pause longer than the lock TTL can cause the lock to expire while the holder is frozen, letting a second client acquire the same lock."
+    ],
+    "gold_sources": [
+      "https://redis.io/docs/latest/develop/clients/patterns/distributed-locks",
+      "https://martin.kleppmann.com/2016/02/08/how-to-do-distributed-locking.html"
+    ],
+    "notes": "Curated directly from the cached, citation-clean report (reports/20260603-131303). Every key_claim traces to an extracted claim. This is the trusted anchor entry and the one to run the judge against first."
+  },
+  {
+    "id": "q005",
+    "category": "technical_depth",
+    "question": "How does speculative decoding speed up LLM inference, and what are its main failure modes?",
+    "reference_answer": "Speculative decoding accelerates autoregressive LLM inference by using a small, fast draft model to propose a sequence of candidate tokens, which the large target model then verifies in a single parallel forward pass. Tokens are accepted as long as they match the target model's distribution (via a rejection-sampling acceptance criterion that preserves the target's output distribution), and on the first rejection the target's own token is used. The speedup depends on the acceptance rate; it degrades when the draft and target distributions diverge, and it adds memory/orchestration overhead from running two models.",
+    "key_claims": [
+      "A small draft model proposes candidate tokens that the larger target model verifies in parallel in a single forward pass.",
+      "An acceptance/rejection criterion ensures the output distribution matches what the target model would have produced on its own.",
+      "The realized speedup is proportional to the token acceptance rate.",
+      "When the draft model's distribution diverges from the target's, the acceptance rate drops and the speedup shrinks."
+    ],
+    "gold_sources": [
+      "https://arxiv.org/abs/2211.17192"
+    ],
+    "notes": "Tests technical synthesis without leaning on recency. Well-established (Leviathan et al. 2022; Chen et al. 2023), so the gold answer is reliable from training knowledge. The distribution-preservation claim is the subtle one a shallow answer misses."
+  },
+  {
+    "id": "q006",
+    "category": "technical_depth",
+    "question": "How does the Raft consensus algorithm elect a leader and ensure log consistency?",
+    "reference_answer": "Raft divides time into terms and uses randomized election timeouts: when a follower hears nothing from a leader before its timeout, it becomes a candidate, increments the term, and requests votes. A candidate that wins a majority of votes becomes leader; randomized timeouts make split votes rare. Log consistency is maintained because a leader only commits an entry once it is replicated to a majority, followers reject AppendEntries that don't match their log's previous index/term (the consistency check), and the election restriction ensures only a candidate with an up-to-date log can win, so committed entries are never lost.",
+    "key_claims": [
+      "A follower becomes a candidate and starts an election after a randomized election timeout elapses without hearing from a leader.",
+      "A candidate becomes leader by receiving votes from a majority of the cluster within a term.",
+      "An entry is committed only once it is replicated to a majority of nodes.",
+      "The AppendEntries consistency check (matching previous log index and term) forces follower logs to converge with the leader's.",
+      "The election restriction prevents a candidate without an up-to-date log from being elected, protecting committed entries."
+    ],
+    "gold_sources": [
+      "https://raft.github.io/raft.pdf"
+    ],
+    "notes": "Tests technical depth on a protocol with a single canonical source (the Ongaro/Ousterhout paper), so the gold answer is highly reliable. Good contrast with Redlock since both touch quorums/majorities."
+  },
+  {
+    "id": "q007",
+    "category": "multi_hop",
+    "question": "Which authors have won both the Booker Prize and the Nobel Prize in Literature, and in what years?",
+    "reference_answer": "[VERIFY] Several Nobel laureates also won the Booker. Confirmed examples from training knowledge include: Nadine Gordimer (Booker 1974, shared; Nobel 1991), William Golding (Booker 1980; Nobel 1983), J. M. Coetzee (Booker 1983 and 1999; Nobel 2003), and Kazuo Ishiguro (Booker 1989; Nobel 2017). VERIFY each pairing and year, and check for any winners after the training cutoff before trusting the full list.",
+    "key_claims": [
+      "[VERIFY] J. M. Coetzee won the Booker Prize (1983 and 1999) and the Nobel Prize in Literature (2003).",
+      "[VERIFY] Kazuo Ishiguro won the Booker Prize (1989) and the Nobel Prize in Literature (2017).",
+      "[VERIFY] William Golding won the Booker Prize (1980) and the Nobel Prize in Literature (1983)."
+    ],
+    "gold_sources": [],
+    "notes": "Tests cross-source corroboration and punishes hallucination (it is easy to invent a plausible-but-wrong pairing). Years must be checked individually; a wrong year is a faithfulness failure the judge should catch."
+  },
+  {
+    "id": "q008",
+    "category": "multi_hop",
+    "question": "What programming language was used to write the original Git implementation, and what language was the original Python interpreter (CPython) written in — and what do these choices have in common?",
+    "reference_answer": "Git's original implementation by Linus Torvalds was written primarily in C (with shell scripts and some Perl for porcelain commands in the early days). CPython, the reference Python interpreter, is also written in C. The common thread is that both foundational tools were implemented in C for low-level control and portable performance, and both expose higher-level interfaces on top of a C core.",
+    "key_claims": [
+      "The original Git implementation was written primarily in C.",
+      "CPython, the reference Python interpreter, is written in C.",
+      "Both tools were implemented in C for performance and portability, exposing higher-level interfaces over a C core."
+    ],
+    "gold_sources": [],
+    "notes": "Tests decomposition (two independent factual hops) plus a synthesis hop (the commonality). Both hops are stable, well-known facts reliable from training knowledge."
+  },
+  {
+    "id": "q009",
+    "category": "ambiguous",
+    "question": "Is intermittent fasting effective for weight loss?",
+    "reference_answer": "A well-calibrated answer hedges: meta-analyses of randomized trials generally find intermittent fasting produces weight loss broadly comparable to continuous calorie restriction, with no large consistent advantage once total calorie intake is matched. Effectiveness depends heavily on adherence, study duration is often short, and individual results vary. A good answer should avoid overclaiming a unique fat-burning effect and should surface these caveats rather than give a flat yes/no.",
+    "key_claims": [
+      "Intermittent fasting can produce weight loss, but generally comparable to continuous calorie restriction rather than clearly superior when calories are matched.",
+      "Outcomes depend heavily on adherence and total calorie intake.",
+      "A good answer acknowledges uncertainty / mixed evidence rather than giving an unqualified yes."
+    ],
+    "gold_sources": [],
+    "notes": "Tests calibration on a contested topic; the agent should hedge appropriately and not overclaim. The third key_claim explicitly rewards calibration, which is the point of the ambiguous category. General consensus is stable but cite-check specific magnitude claims."
+  },
+  {
+    "id": "q010",
+    "category": "ambiguous",
+    "question": "Is microservices architecture better than a monolith?",
+    "reference_answer": "A well-calibrated answer says 'it depends' rather than declaring a winner: microservices help with independent scaling, team autonomy, and fault isolation at the cost of operational complexity, network latency, and distributed-system failure modes; monoliths are simpler to build, test, and deploy early but can become hard to scale organizationally. The right choice depends on team size, scale, and organizational maturity, and many systems start as a monolith and extract services later.",
+    "key_claims": [
+      "Neither is universally better; the answer depends on context (team size, scale, organizational maturity).",
+      "Microservices add operational and distributed-systems complexity as a cost of their scaling/autonomy benefits.",
+      "Monoliths are simpler to build and deploy early, and a common path is to start monolithic and extract services later.",
+      "A good answer hedges and avoids declaring a context-free winner."
+    ],
+    "gold_sources": [],
+    "notes": "Tests calibration on an opinionated engineering debate. Rewards a hedged, trade-off-based answer and penalizes a confident blanket verdict. Claims are stable architectural consensus."
+  }
+]

@@ -1,0 +1,858 @@
+{
+  "query": "What is the Redlock algorithm?",
+  "summary": "## Overview: The Redlock Algorithm and Its Role in Distributed Systems\n\nThe Redlock algorithm is a fault-tolerant distributed locking mechanism designed by Salvatore Sanfilippo (the creator of Redis) to ensure mutual exclusion across clients in a distributed system [5]. The fundamental purpose of any lock is to ensure that among several nodes that might try to do the same piece of work, only one actually does it at a time [1]. Redlock addresses a critical weakness in single-instance Redis locking: a simple `SETNX` command on a single Redis instance fails catastrophically when that instance goes down, causing the lock to disappear entirely [0]. Additionally, in Redis implementations where data replication is performed by background processes rather than the master thread, a successful client write does not guarantee that data has been replicated [4]. Redlock solves these problems by requiring a majority of independent Redis instances to agree on a lock acquisition [0].\n\n## Mechanical Operation: Quorum-Based Lock Acquisition\n\nRedlock operates as a quorum-based algorithm [2] across N independent Redis instances (not a cluster) [6]. The acquisition process follows these key steps:\n\n**Lock Acquisition:** To acquire a lock, a client first generates a unique token [5, 8]. The client then sends a `SET key value NX PX ttl` command to each of the N Redis instances [5, 6]. The lock is considered acquired only if the client successfully locks a majority (quorum) of the instances [5, 6, 7]. Specifically, the quorum requirement is more than half of the Redis instances, or N/2 + 1 nodes [6, 7]. The key insight is that a lock is only valid if acquired from more than half the nodes within the TTL window, accounting for clock drift [6]. The elapsed time must be less than the TTL for a lock to be valid [6]. If the quorum is met and the timing constraints hold, the client holds the lock; otherwise, it rolls back by deleting partial locks from the instances [5].\n\n**Lock Release:** When the client completes its critical section, it releases the lock by sending a `DEL key` command to all instances [5]. Crucially, the lock is only released if the stored token matches the client's token, preventing accidental release of another client's lock [5].\n\n**Fault Tolerance:** With 5 Redis instances, acquiring the lock on at least 3 instances allows confidence that the lock is valid even if 2 instances fail [0]. This design ensures that a minority of node failures does not compromise the lock's validity [11].\n\n## Known Criticisms and Limitations\n\nThe Redlock algorithm faces significant criticism from distributed systems researchers. Martin Kleppmann, a prominent distributed systems expert, argues that Redlock is \"neither fish nor fowl\": it is unnecessarily heavyweight and expensive for efficiency-optimization locks, but it is not sufficiently safe for situations in which correctness depends on the lock [9]. This characterization reflects a fundamental tension in the algorithm's design goals.\n\nThe cost of Redlock is substantial and is not suitable for all organizations and services [4]. While Redlock can achieve a very high level of consistency and is considered one of the best paradigms for implementing distributed locking [4], its practical applicability depends on use-case requirements.\n\n**Timing and Expiration Vulnerabilities:** A critical limitation stems from Redlock's reliance on auto-release features. Distributed locks with an auto-release feature require a way to avoid issues when clients use a lock after the expire time, violating the mutual exclusion guarantee while accessing a shared resource [10]. This is not merely a theoretical concern but a practical failure mode.\n\n## Failure Modes: Garbage Collection Pauses and Process Scheduling\n\nOne of the most insidious failure modes of Redlock involves garbage collection (GC) pauses. Stop-the-World Garbage Collection pauses all application execution threads at designated safepoints [22]. These pauses can last 8 seconds or longer, freezing entire application execution [19]. When a process is paused by garbage collection and its lock TTL expires, another process can immediately acquire the same lock [18]. For example, if a process holds a 10-second TTL lock and experiences a 15-second GC pause, Redis will expire the lock while the process is frozen. Process B can then immediately acquire the now-expired lock, creating a situation where two processes believe they hold the same exclusive lock [18].\n\n## Operational Challenges: Clock Skew and Network Partitions\n\nClock skew represents a fundamental challenge that affects distributed locks including Redlock [13, 27]. Network partitions are another operational challenge that affects distributed locks including Redlock [13, 27]. More broadly, network, pause, and clock-skew (NPC) affects every distributed lock, including Redlock and Zookeeper alike [27]. Critically, Redlock cannot prevent the effects of these challenges [27]. The algorithm assumes bounded clock drift and network latency, but real-world systems frequently violate these assumptions [16].\n\n## Practical Use Cases and Implementations\n\nRedlock has been implemented across multiple programming languages and platforms. Implementations exist for Node.js [11, 24], Go [0], and .NET [12], demonstrating broad adoption. The algorithm is designed to use independent client connections and handle distributed protocols [11].\n\n**Real-World Applications:** Redlock is deployed in several practical scenarios:\n- **Inventory Management:** Preventing two users from buying the last item in stock [23]\n- **Scheduled Job Coordination:** Ensuring only one service runs a scheduled job at a time [23]\n- **Reservation Systems:** Preventing double booking of seats in booking systems [26]\n- **General Resource Coordination:** Guaranteeing mutual exclusion while accessing shared resources in distributed systems [26]\n\n**Design Characteristics:** Redlock is designed for high availability and does not care if a minority of Redis instances or clusters fail at an operation [11]. It can be used with a single Redis cluster or sentinel configuration by passing one preconfigured client [11]. The purpose of Redlock is to provide exclusivity guarantees on a resource over a duration of time [11].\n\n## Suitability and Trade-offs\n\nThe practical applicability of Redlock depends critically on the lock's purpose. Redlock works well for efficiency locks (preventing duplicate work) [29], where occasional violations of mutual exclusion are tolerable and the goal is to prevent redundant computation. However, Redlock may not be suitable for correctness locks where safety is critical [29]. In scenarios where the integrity of the system depends on strict mutual exclusion guarantees, Redlock's vulnerability to clock skew, GC pauses, and network partitions makes it a risky choice.\n\nThe distinction between efficiency and correctness locks is essential for practitioners. Efficiency locks optimize performance by preventing redundant work; brief violations are acceptable. Correctness locks, by contrast, must guarantee mutual exclusion to prevent data corruption or inconsistency. Redlock's design makes it fundamentally unsuitable for the latter category.",
+  "claims": [
+    {
+      "text": "The Redlock algorithm is a fault-tolerant distributed locking algorithm implemented on top of Redis.",
+      "source_indices": [
+        1
+      ],
+      "sub_question_id": 1
+    },
+    {
+      "text": "The Redlock algorithm requires a majority of independent Redis instances to agree on a lock.",
+      "source_indices": [
+        0
+      ],
+      "sub_question_id": 1
+    },
+    {
+      "text": "A single Redis instance lock using SETNX has a fundamental problem: if that Redis instance goes down, the lock disappears.",
+      "source_indices": [
+        0
+      ],
+      "sub_question_id": 1
+    },
+    {
+      "text": "The Redlock algorithm addresses the problem of single Redis instance failure by requiring agreement from a majority of independent Redis instances.",
+      "source_indices": [
+        0
+      ],
+      "sub_question_id": 1
+    },
+    {
+      "text": "With 5 Redis instances, acquiring the lock on at least 3 instances allows confidence that the lock is valid even if 2 instances fail.",
+      "source_indices": [
+        0
+      ],
+      "sub_question_id": 1
+    },
+    {
+      "text": "The purpose of a lock is to ensure that among several nodes that might try to do the same piece of work, only one actually does it at a time.",
+      "source_indices": [
+        1
+      ],
+      "sub_question_id": 1
+    },
+    {
+      "text": "Redlock is a quorum-based locking algorithm.",
+      "source_indices": [
+        2
+      ],
+      "sub_question_id": 1
+    },
+    {
+      "text": "In Redis implementation, data replication is performed by the background process, not the master thread, so when a client writes successfully, it does not mean the data is replicated successfully.",
+      "source_indices": [
+        4
+      ],
+      "sub_question_id": 1
+    },
+    {
+      "text": "A single Redis is not reliable, even in a cluster of multiple Redis instances.",
+      "source_indices": [
+        4
+      ],
+      "sub_question_id": 1
+    },
+    {
+      "text": "Redlock can achieve a very high level of consistency and is one of the best paradigms for implementing distributed locking.",
+      "source_indices": [
+        4
+      ],
+      "sub_question_id": 1
+    },
+    {
+      "text": "The Redlock algorithm is a distributed locking mechanism designed for Redis to ensure mutual exclusion across clients in a distributed system.",
+      "source_indices": [
+        5
+      ],
+      "sub_question_id": 2
+    },
+    {
+      "text": "To acquire a lock in Redlock, a client generates a unique token.",
+      "source_indices": [
+        5,
+        8
+      ],
+      "sub_question_id": 2
+    },
+    {
+      "text": "To acquire a lock in Redlock, a client sends a SET key value NX PX ttl command to each of the N Redis instances.",
+      "source_indices": [
+        5,
+        6
+      ],
+      "sub_question_id": 2
+    },
+    {
+      "text": "In Redlock, the client considers the lock acquired only if it successfully locks a majority (quorum) of the instances.",
+      "source_indices": [
+        5,
+        6,
+        7
+      ],
+      "sub_question_id": 2
+    },
+    {
+      "text": "Redlock quorum requirement is more than half of the redis instances.",
+      "source_indices": [
+        6,
+        7
+      ],
+      "sub_question_id": 2
+    },
+    {
+      "text": "In Redlock, the quorum requirement is N/2 + 1 nodes.",
+      "source_indices": [
+        6
+      ],
+      "sub_question_id": 2
+    },
+    {
+      "text": "When the client completes its critical section in Redlock, it releases the lock by sending a DEL key command to all instances.",
+      "source_indices": [
+        5
+      ],
+      "sub_question_id": 2
+    },
+    {
+      "text": "In Redlock, the lock is only released if the stored token matches the client's token, to prevent releasing someone else's lock.",
+      "source_indices": [
+        5
+      ],
+      "sub_question_id": 2
+    },
+    {
+      "text": "In Redlock, if the quorum is met and the timing constraints hold, the client holds the lock.",
+      "source_indices": [
+        5
+      ],
+      "sub_question_id": 2
+    },
+    {
+      "text": "In Redlock, if the quorum is not met or timing constraints do not hold, the client rolls back by deleting partial locks from the instances.",
+      "source_indices": [
+        5
+      ],
+      "sub_question_id": 2
+    },
+    {
+      "text": "In Redlock, the elapsed time must be less than the TTL for a lock to be valid.",
+      "source_indices": [
+        6
+      ],
+      "sub_question_id": 2
+    },
+    {
+      "text": "Redlock uses N independent Redis instances, not a cluster.",
+      "source_indices": [
+        6
+      ],
+      "sub_question_id": 2
+    },
+    {
+      "text": "The Redlock algorithm is unnecessarily heavyweight and expensive for efficiency-optimization locks.",
+      "source_indices": [
+        9
+      ],
+      "sub_question_id": 3
+    },
+    {
+      "text": "The Redlock algorithm is not sufficiently safe for situations in which correctness depends on the lock.",
+      "source_indices": [
+        9
+      ],
+      "sub_question_id": 3
+    },
+    {
+      "text": "In Redis implementation, data replication is performed by the background process, not the master thread, so when a client writes successfully, it does not mean the data is replicated successfully.",
+      "source_indices": [
+        4
+      ],
+      "sub_question_id": 3
+    },
+    {
+      "text": "A single Redis instance is not reliable for distributed locking.",
+      "source_indices": [
+        4
+      ],
+      "sub_question_id": 3
+    },
+    {
+      "text": "Redlock has a very high cost and is not suitable for all organizations and services.",
+      "source_indices": [
+        4
+      ],
+      "sub_question_id": 3
+    },
+    {
+      "text": "Distributed locks with an auto-release feature require a way to avoid issues when clients use a lock after the expire time, violating the mutual exclusion while accessing a shared resource.",
+      "source_indices": [
+        10
+      ],
+      "sub_question_id": 3
+    },
+    {
+      "text": "Redlock is a node.js implementation of the redlock algorithm for distributed redis locks.",
+      "source_indices": [
+        11
+      ],
+      "sub_question_id": 4
+    },
+    {
+      "text": "Redlock is designed to use ioredis to keep its client connections and handle the cluster protocols.",
+      "source_indices": [
+        11
+      ],
+      "sub_question_id": 4
+    },
+    {
+      "text": "Redlock can be implemented in Go to coordinate access to shared resources across multiple processes and servers.",
+      "source_indices": [
+        0
+      ],
+      "sub_question_id": 4
+    },
+    {
+      "text": "The purpose of redlock is to provide exclusivity guarantees on a resource over a duration of time.",
+      "source_indices": [
+        11
+      ],
+      "sub_question_id": 4
+    },
+    {
+      "text": "Redlock is designed for high availability and does not care if a minority of redis instances or clusters fail at an operation.",
+      "source_indices": [
+        11
+      ],
+      "sub_question_id": 4
+    },
+    {
+      "text": "Redlock can be used with a single redis cluster or sentinel configuration by passing one preconfigured client to redlock.",
+      "source_indices": [
+        11
+      ],
+      "sub_question_id": 4
+    },
+    {
+      "text": "Redlock can achieve a very high level of consistency and is one of the best paradigms for implementing distributed locking.",
+      "source_indices": [
+        4
+      ],
+      "sub_question_id": 4
+    },
+    {
+      "text": "The Redlock algorithm addresses the problem of a single Redis instance lock by requiring a majority of independent Redis instances to agree on a lock.",
+      "source_indices": [
+        0
+      ],
+      "sub_question_id": 4
+    },
+    {
+      "text": "With 5 Redis instances, acquiring the lock on at least 3 instances allows confidence that the lock is valid even if 2 instances fail.",
+      "source_indices": [
+        0
+      ],
+      "sub_question_id": 4
+    },
+    {
+      "text": "Redlock implements a Distributed Lock Manager that can be used to implement a distributed lock.",
+      "source_indices": [
+        12
+      ],
+      "sub_question_id": 4
+    },
+    {
+      "text": "The purpose of a lock is to ensure that among several nodes that might try to do the same piece of work, only one actually does it at a time.",
+      "source_indices": [
+        1
+      ],
+      "sub_question_id": 4
+    },
+    {
+      "text": "A single Redis instance lock using SETNX has a fundamental problem: if that Redis instance goes down, the lock disappears.",
+      "source_indices": [
+        0
+      ],
+      "sub_question_id": 4
+    },
+    {
+      "text": "Redlock is implemented through Redis and can achieve fault-tolerant distributed locks on top of Redis.",
+      "source_indices": [
+        4,
+        1
+      ],
+      "sub_question_id": 4
+    },
+    {
+      "text": "A garbage collection pause can freeze an entire process, causing it to exceed its lock's time-to-live (TTL) duration.",
+      "source_indices": [
+        18
+      ],
+      "sub_question_id": 6
+    },
+    {
+      "text": "When a process is paused by garbage collection and its lock TTL expires, another process can immediately acquire the same lock.",
+      "source_indices": [
+        18
+      ],
+      "sub_question_id": 6
+    },
+    {
+      "text": "Garbage collection pauses can last 8 seconds or longer, freezing entire application execution.",
+      "source_indices": [
+        19
+      ],
+      "sub_question_id": 6
+    },
+    {
+      "text": "Stop-the-World Garbage Collection pauses all application execution threads at designated safepoints.",
+      "source_indices": [
+        22
+      ],
+      "sub_question_id": 6
+    },
+    {
+      "text": "Redlock is used to prevent two users from buying the last item in stock.",
+      "source_indices": [
+        23
+      ],
+      "sub_question_id": 7
+    },
+    {
+      "text": "Redlock is used to ensure only one service runs a scheduled job at a time.",
+      "source_indices": [
+        23
+      ],
+      "sub_question_id": 7
+    },
+    {
+      "text": "Redlock is deployed in reservation systems to prevent double booking of seats.",
+      "source_indices": [
+        26
+      ],
+      "sub_question_id": 7
+    },
+    {
+      "text": "Redlock is used in booking systems to guarantee mutual exclusion while accessing shared resources in a distributed system.",
+      "source_indices": [
+        26
+      ],
+      "sub_question_id": 7
+    },
+    {
+      "text": "Clock skew is a challenge that affects distributed locks including Redlock.",
+      "source_indices": [
+        13,
+        27
+      ],
+      "sub_question_id": 8
+    },
+    {
+      "text": "Network partitions are a challenge that affects distributed locks including Redlock.",
+      "source_indices": [
+        13,
+        27
+      ],
+      "sub_question_id": 8
+    },
+    {
+      "text": "Network, pause, and clock-skew (NPC) affects every distributed lock, including Redlock and Zookeeper.",
+      "source_indices": [
+        27
+      ],
+      "sub_question_id": 8
+    },
+    {
+      "text": "Redlock cannot prevent the effects of network, pause, and clock-skew challenges.",
+      "source_indices": [
+        27
+      ],
+      "sub_question_id": 8
+    },
+    {
+      "text": "Redlock works well for efficiency locks (preventing duplicate work).",
+      "source_indices": [
+        29
+      ],
+      "sub_question_id": 8
+    },
+    {
+      "text": "Redlock may not be suitable for correctness locks where safety is critical.",
+      "source_indices": [
+        29
+      ],
+      "sub_question_id": 8
+    },
+    {
+      "text": "A single Redis instance failure results in loss of the lock.",
+      "source_indices": [
+        29
+      ],
+      "sub_question_id": 8
+    }
+  ],
+  "sources": [
+    {
+      "url": "https://oneuptime.com/blog/post/2026-01-25-distributed-locks-redis-redlock-go/view",
+      "title": "How to Implement Distributed Locks with Redis Redlock in ...",
+      "domain": "oneuptime.com",
+      "published": null,
+      "snippet": "# How to Implement Distributed Locks with Redis Redlock in Go. Learn how to implement distributed locks using the Redlock algorithm in Go to coordinate access to shared resources across multiple processes and servers. A single Redis instance lock using `SETNX` works for many cases, but it has a fundamental problem: if that Redis instance goes down, your lock disappears. The Redlock algorithm addresses this by requiring a majority of independent Redis instances to agree on a lock. If you have 5 Redis instances and acquire the lock on at least 3, you can be confident the lock is valid even if 2 instances fail. func (r *Redlock) Acquire(ctx context.Context, key string, ttl time.Duration) (*Lock, error) {. lock, err := r.tryAcquire(ctx, key, value, ttl). func (r *Redlock) tryAcquire(ctx context.Context, key, value string, ttl time.Duration) (*Lock, error) {. func (r *Redlock) acquireSingle(ctx context.Context, client *redis.Client, key, value string, ttl time.Duration) bool {. func (r *Redlock) Extend(ctx context.Context, lock *Lock, ttl time.Duration) error {.",
+      "credibility": 0.29,
+      "credibility_components": {
+        "domain_score": 0.2,
+        "recency_score": 0.5,
+        "tier": 5.0
+      }
+    },
+    {
+      "url": "https://martin.kleppmann.com/2016/02/08/how-to-do-distributed-locking.html",
+      "title": "How to do distributed locking - Martin Kleppmann",
+      "domain": "martin.kleppmann.com",
+      "published": null,
+      "snippet": "As part of the research for my book, I came across an algorithm called Redlock on the Redis website. The algorithm claims to implement fault-tolerant distributed locks (or rather, leases [1]) on top of Redis, and the page asks for feedback from people who are into distributed systems. Since there are already over 10 independent implementations of Redlock and we don’t know who is already relying on this algorithm, I thought it would be worth sharing my notes publicly. Before I go into the details of Redlock, let me say that I quite like Redis, and I have successfully used it in production in the past. I think it’s a good fit in situations where you want to share some transient, approximate, fast-changing data between servers, and where it’s not a big deal if you occasionally lose that data for whatever reason. The purpose of a lock is to ensure that among several nodes that might try to do the same piece of work, only one actually does it (at least only one at a time).",
+      "credibility": 0.29,
+      "credibility_components": {
+        "domain_score": 0.2,
+        "recency_score": 0.5,
+        "tier": 5.0
+      }
+    },
+    {
+      "url": "https://www.youtube.com/watch?v=qY4MfWv01pI",
+      "title": "How Distributed Lock works | ft Redis | System Design - YouTube",
+      "domain": "youtube.com",
+      "published": null,
+      "snippet": "... Redlock, a widely adopted quorum-based locking algorithm that ... Solution Architect Associate: https://youtu.be/GzomXNLFgkk ▻AWS",
+      "credibility": 0.29,
+      "credibility_components": {
+        "domain_score": 0.2,
+        "recency_score": 0.5,
+        "tier": 5.0
+      }
+    },
+    {
+      "url": "https://redis.io/docs/latest/develop/clients/patterns/distributed-locks",
+      "title": "Distributed Locks with Redis | Docs",
+      "domain": "redis.io",
+      "published": null,
+      "snippet": "*   [Distributed locks](https://redis.io/docs/latest/develop/clients/patterns/distributed-locks/). ## Implementations [](https://redis.io/docs/latest/develop/clients/patterns/distributed-locks#implementations \"Copy link to clipboard\"). ## Safety and Liveness Guarantees [](https://redis.io/docs/latest/develop/clients/patterns/distributed-locks#safety-and-liveness-guarantees \"Copy link to clipboard\"). ## Why Failover-based Implementations Are Not Enough [](https://redis.io/docs/latest/develop/clients/patterns/distributed-locks#why-failover-based-implementations-are-not-enough \"Copy link to clipboard\"). ## Correct Implementation with a Single Instance [](https://redis.io/docs/latest/develop/clients/patterns/distributed-locks#correct-implementation-with-a-single-instance \"Copy link to clipboard\"). ## The Redlock Algorithm [](https://redis.io/docs/latest/develop/clients/patterns/distributed-locks#the-redlock-algorithm \"Copy link to clipboard\"). [](https://redis.io/docs/latest/develop/clients/patterns/distributed-locks#is-the-algorithm-asynchronous \"Copy link to clipboard\"). ### Releasing the Lock [](https://redis.io/docs/latest/develop/clients/patterns/distributed-locks#releasing-the-lock \"Copy link to clipboard\"). ### Safety Arguments [](https://redis.io/docs/latest/develop/clients/patterns/distributed-locks#safety-arguments \"Copy link to clipboard\"). ### Liveness Arguments [](https://redis.io/docs/latest/develop/clients/patterns/distributed-locks#liveness-arguments \"Copy link to clipboard\"). ### Disclaimer about consistency [](https://redis.io/docs/latest/develop/clients/patterns/distributed-locks#disclaimer-about-consistency \"Copy link to clipboard\"). [](https://redis.io/docs/latest/develop/clients/patterns/distributed-locks#want-to-help \"Copy link to clipboard\"). ## Analysis of Redlock [](https://redis.io/docs/latest/develop/clients/patterns/distributed-locks#analysis-of-redlock \"Copy link to clipboard\"). [Back to top ↑](https://redis.io/docs/latest/develop/clients/patterns/distributed-locks#). *   [Implementations](https://redis.io/docs/latest/develop/clients/patterns/distributed-locks#implementations). *   [Safety and Liveness Guarantees](https://redis.io/docs/latest/develop/clients/patterns/distributed-locks#safety-and-liveness-guarantees). *   [Why Failover-based Implementations Are Not Enough](https://redis.io/docs/latest/develop/clients/patterns/distributed-locks#why-failover-based-implementations-are-not-enough). *   [Correct Implementation with a Single Instance](https://redis.io/docs/latest/develop/clients/patterns/distributed-locks#correct-implementation-with-a-single-instance). *   [The Redlock Algorithm](https://redis.io/docs/latest/develop/clients/patterns/distributed-locks#the-redlock-algorithm). *   [Is the Algorithm Asynchronous?](https://redis.io/docs/latest/develop/clients/patterns/distributed-locks#is-the-algorithm-asynchronous). *   [Releasing the Lock](https://redis.io/docs/latest/develop/clients/patterns/distributed-locks#releasing-the-lock). *   [Safety Arguments](https://redis.io/docs/latest/develop/clients/patterns/distributed-locks#safety-arguments). *   [Liveness Arguments](https://redis.io/docs/latest/develop/clients/patterns/distributed-locks#liveness-arguments). *   [Want to help?](https://redis.io/docs/latest/develop/clients/patterns/distributed-locks#want-to-help). *   [Analysis of Redlock](https://redis.io/docs/latest/develop/clients/patterns/distributed-locks#analysis-of-redlock).",
+      "credibility": 0.57,
+      "credibility_components": {
+        "domain_score": 0.6,
+        "recency_score": 0.5,
+        "tier": 3.0
+      }
+    },
+    {
+      "url": "https://dev.to/lazypro/explain-redlock-in-depth-31jj",
+      "title": "Explain Redlock in Depth - DEV Community",
+      "domain": "dev.to",
+      "published": null,
+      "snippet": "Previously, I introduced two types of locks, mutex locks and barriers, and I used Redis as an example to explain the differences between the two types of locks. Shortly after that, I received a reply saying that if you want to implement distributed locks, the Redis approach is not enough and you should refer to Redlock. Although Redlock is implemented through Redis, it can achieve a very high level of consistency and is one of the best paradigms for implementing distributed locking. However, Redlock has a very high cost behind it and is not suitable for all organizations and services. ## Redis is not reliable. In Redis implementation, data replication is performed by the background process, not the master thread, so when a client writes successfully, it does not mean the data is replicated successfully. As we have seen, a single Redis is not reliable, even in a cluster of multiple Redis. So how do we use Redis to implement a reliable Redlock?",
+      "credibility": 0.43,
+      "credibility_components": {
+        "domain_score": 0.4,
+        "recency_score": 0.5,
+        "tier": 4.0
+      }
+    },
+    {
+      "url": "https://thediligentengineer.com/the-redlock-algorithm",
+      "title": "The Redlock Algorithm | TDE - The Diligent Engineer",
+      "domain": "thediligentengineer.com",
+      "published": null,
+      "snippet": "# The Redlock Algorithm. Cover Image for The Redlock Algorithm. The Redlock algorithm is a distributed locking mechanism designed for Redis to ensure mutual exclusion across clients in a distributed system. It operates by acquiring locks on a majority of Redis nodes to guard against node failures and network partitions. To acquire a lock, a client generates a unique token and sends a `SET key value NX PX ttl` command to each of the N Redis instances. The client considers the lock acquired only if it successfully locks a majority (quorum) of the instances. When the client completes its critical section, it releases the lock by sending a `DEL key` command to all instances—but only if the stored token matches—to prevent releasing someone else’s lock. 3. **Commit/Abort**: If the quorum is met and the timing constraints hold, the client holds the lock; otherwise, it rolls back by deleting partial locks from the instances.",
+      "credibility": 0.29,
+      "credibility_components": {
+        "domain_score": 0.2,
+        "recency_score": 0.5,
+        "tier": 5.0
+      }
+    },
+    {
+      "url": "https://oneuptime.com/blog/post/2026-03-31-redis-redlock-algorithm/view",
+      "title": "How the Redlock Algorithm Works in Redis - OneUptime",
+      "domain": "oneuptime.com",
+      "published": null,
+      "snippet": "# How the Redlock Algorithm Works in Redis. Understand how the Redlock distributed locking algorithm works in Redis, including its design rationale, safety properties, and the steps for acquiring and releasing locks. Redlock is a distributed locking algorithm designed by Salvatore Sanfilippo (the creator of Redis) to provide mutual exclusion across multiple independent Redis instances. ## Why Not Use a Single Redis Node for Locks? A simple `SET key value NX PX 30000` on a single Redis instance fails when:. Redlock uses N independent Redis instances (not a cluster) to address this. Try to acquire the lock on all N nodes using `SET NX PX`:. def acquire_lock_on_node(node: redis.Redis, resource: str, token: str, ttl_ms: int) -> bool:. The lock is acquired only if you got locks from a majority (N/2 + 1) of nodes AND the elapsed time is less than the TTL:. The key insight is that a lock is only valid if acquired from more than half the nodes within the TTL window, accounting for clock drift.",
+      "credibility": 0.29,
+      "credibility_components": {
+        "domain_score": 0.2,
+        "recency_score": 0.5,
+        "tier": 5.0
+      }
+    },
+    {
+      "url": "https://github.com/samcook/RedLock.net/blob/master/README.md",
+      "title": "README.md - RedLock.net - GitHub",
+      "domain": "github.com",
+      "published": null,
+      "snippet": "A lock is acquired if RedLock can set a lock key in more than half of the redis instances. ... RedLock quorum is still required before another process can acquire",
+      "credibility": 0.43,
+      "credibility_components": {
+        "domain_score": 0.4,
+        "recency_score": 0.5,
+        "tier": 4.0
+      }
+    },
+    {
+      "url": "https://medium.com/@ayushnandanwar003/achieving-distributed-locking-in-node-js-with-redis-and-redlock-0574f5ac333d",
+      "title": "Achieving Distributed Locking in Node.js with Redis and Redlock",
+      "domain": "medium.com",
+      "published": null,
+      "snippet": "Redlock's algorithm involves multiple steps, including generating a unique token, attempting to acquire the lock on each Redis instance, and",
+      "credibility": 0.43,
+      "credibility_components": {
+        "domain_score": 0.4,
+        "recency_score": 0.5,
+        "tier": 4.0
+      }
+    },
+    {
+      "url": "https://news.ycombinator.com/item?id=41315621",
+      "title": "Martin Kleppmann has some interesting thoughts on Redlock",
+      "domain": "news.ycombinator.com",
+      "published": null,
+      "snippet": "| |  | | --- | | zinodaur on Aug 22, 2024  | parent | context | favorite | on: Distributed Locks with Redis (2014)\")   Martin Kleppmann has some interesting thoughts on Redlock: > I think the Redlock algorithm is a poor choice because it is “neither fish nor fowl”: it is unnecessarily heavyweight and expensive for efficiency-optimization locks, but it is not sufficiently safe for situations in which correctness depends on the lock. |     |  |  | | --- | --- | | |  | | --- | | cjk on Aug 22, 2024  | next )   Salvatore Sanfilippo (author of Redis and Redlock) wrote a response to Martin Kleppmann's analysis that is worth a read (though it is a bit dense and hard to follow at times):  I think I agree with Kleppmann's analysis, though.",
+      "credibility": 0.29,
+      "credibility_components": {
+        "domain_score": 0.2,
+        "recency_score": 0.5,
+        "tier": 5.0
+      }
+    },
+    {
+      "url": "https://antirez.com/news/101",
+      "title": "Is Redlock safe? - <antirez>",
+      "domain": "antirez.com",
+      "published": null,
+      "snippet": "Martin Kleppmann, a distributed systems researcher, yesterday published an analysis of Redlock (http://redis.io/topics/distlock), that you can find here: http://martin.kleppmann.com/2016/02/08/how-to-do-distributed-locking.html Redlock is a client side distributed locking algorithm I designed to be used with Redis, but the algorithm orchestrates, client side, a set of nodes that implement a data store with certain capabilities, in order to create a multi-master fault tolerant, and hopefully safe, distributed lock with auto release capabilities. In this analysis I’ll analyze Martin's analysis so that other experts in the field can check the two documents (the analysis and the counter-analysis), and eventually we can understand if Redlock can be considered safe or not. Distributed locks with an auto-release feature (the mutually exclusive lock property is only valid for a fixed amount of time after the lock is acquired) require a way to avoid issues when clients use a lock after the expire time, violating the mutual exclusion while accessing a shared resource.",
+      "credibility": 0.29,
+      "credibility_components": {
+        "domain_score": 0.2,
+        "recency_score": 0.5,
+        "tier": 5.0
+      }
+    },
+    {
+      "url": "https://github.com/mike-marcacci/node-redlock",
+      "title": "GitHub - mike-marcacci/node-redlock: A node.js redlock implementation for distributed, highly-available redis locks · GitHub",
+      "domain": "github.com",
+      "published": null,
+      "snippet": "This is a node.js implementation of the redlock algorithm for distributed redis locks. Redlock is designed to use ioredis to keep its client connections and handle the cluster protocols. In the case that auto-extension fails, an AbortSignal will be updated to indicate that abortion of the routine is in order, and to pass along the encountered error. The first parameter is an array of resources to lock; the second is the requested lock duration in milliseconds, which MUST NOT contain values after the decimal. Because redlock is designed for high availability, it does not care if a minority of redis instances/clusters fail at an operation. It is completely possible to use a *single* redis cluster or sentinal configuration by passing one preconfigured client to redlock. The purpose of redlock is to provide exclusivity guarantees on a resource over a duration of time, and is not designed to report the ownership status of a resource.",
+      "credibility": 0.43,
+      "credibility_components": {
+        "domain_score": 0.4,
+        "recency_score": 0.5,
+        "tier": 4.0
+      }
+    },
+    {
+      "url": "https://cheoalfredo.medium.com/distributed-locks-with-redis-net-2b1b50355deb",
+      "title": "Distributed Locks with Redis + .NET | by José A. Fernández - Medium",
+      "domain": "cheoalfredo.medium.com",
+      "published": null,
+      "snippet": "In this article we'll elaborate on Redlock, a canonical algorithm that implements a Distributed Lock Manager we can use to implement a distributed lock with",
+      "credibility": 0.29,
+      "credibility_components": {
+        "domain_score": 0.2,
+        "recency_score": 0.5,
+        "tier": 5.0
+      }
+    },
+    {
+      "url": "https://www.youtube.com/watch?v=pRaqtVBaSEw",
+      "title": "The Truth About Redis Distributed Locks - YouTube",
+      "domain": "youtube.com",
+      "published": null,
+      "snippet": "... clock skew and network partitions, and present robust alternatives to ensure strong consistency and data integrity, helping you avoid common",
+      "credibility": 0.29,
+      "credibility_components": {
+        "domain_score": 0.2,
+        "recency_score": 0.5,
+        "tier": 5.0
+      }
+    },
+    {
+      "url": "https://codefarm0.medium.com/distributed-locking-under-the-hood-of-coordination-2ef8b039c13f",
+      "title": "Distributed Locking — Under the Hood of Coordination - Arvind Kumar",
+      "domain": "codefarm0.medium.com",
+      "published": null,
+      "snippet": "The system must behave predictably even during network partitions or node crashes. ... Testing Distributed Locks Under Failure Scenarios",
+      "credibility": 0.29,
+      "credibility_components": {
+        "domain_score": 0.2,
+        "recency_score": 0.5,
+        "tier": 5.0
+      }
+    },
+    {
+      "url": "https://redis.antirez.com/fundamental/redlock.html",
+      "title": "The Redlock Algorithm - Redis Patterns - antirez",
+      "domain": "redis.antirez.com",
+      "published": null,
+      "snippet": "Achieve fault-tolerant distributed locking by acquiring locks on a majority (N/2+1) of N independent Redis instances, tolerating node failures without losing lock consistency. Redlock addresses the fundamental weakness of single-instance Redis locks: if the Redis node fails, the lock is lost. With master-replica setups, a race condition can cause two clients to hold the same lock after failover. 1. Client A acquires the lock on the master. 4. Client B acquires the same lock—the replica doesn't know about Client A's lock. A lock is considered acquired only when a client holds it on a majority of instances (N/2 + 1, so at least 3 out of 5). 2. Attempt to acquire the lock on all N instances sequentially or in parallel:. 4. The client acquired the lock on at least N/2 + 1 instances. 7. If the lock was not acquired (fewer than N/2+1 instances, or elapsed time exceeded TTL), release the lock on ALL instances immediately.",
+      "credibility": 0.29,
+      "credibility_components": {
+        "domain_score": 0.2,
+        "recency_score": 0.5,
+        "tier": 5.0
+      }
+    },
+    {
+      "url": "https://jvns.ca/blog/2016/02/09/til-clock-skew-exists",
+      "title": "TIL: clock skew exists - Julia Evans",
+      "domain": "jvns.ca",
+      "published": null,
+      "snippet": "Redis is a key-value store that can be distributed, and apparently it has a proposal for a locking system called Redlock. These are very interesting to read as a distributed systems n00b – the authors of the articles are making significantly different arguments, and so it’s a useful exercise to try to reason through the arguments and figure out who you think is right. * The clock on a computer can be unreliable (because it goes at the wrong speed, or has jumped back in time). > What they need to do is just, for example, to be able to count 5 seconds with a maximum of 10% error. Here’s the thing – I haven’t seen a lot of systems, but I’ve never seen a system with a clock running too fast. Distributed systems researchers are really really concerned with adverse, sometimes uncommon, things that can happen to your computer (like clock skew).",
+      "credibility": 0.29,
+      "credibility_components": {
+        "domain_score": 0.2,
+        "recency_score": 0.5,
+        "tier": 5.0
+      }
+    },
+    {
+      "url": "https://www.itu.int/epublications/zh/publication/itu-t-g-8271-1-y-1366-1-2022-11-network-limits-for-time-synchronization-in-packet-networks-with-full-timing-support-from-the-network/en",
+      "title": "Recommendation ITU-T G.8271.1/Y.1366.1 (11/2022) - Network ...",
+      "domain": "itu.int",
+      "published": null,
+      "snippet": "There are two main failure scenarios considered for fronthaul networks. a) Timing failures at a link of the fronthaul network that cause",
+      "credibility": 0.29,
+      "credibility_components": {
+        "domain_score": 0.2,
+        "recency_score": 0.5,
+        "tier": 5.0
+      }
+    },
+    {
+      "url": "https://www.reddit.com/r/programming/comments/1pege3b/distributed_lock_failure_how_long_gc_pauses_break",
+      "title": "Distributed Lock Failure: How Long GC Pauses Break Concurrency",
+      "domain": "reddit.com",
+      "published": null,
+      "snippet": "The entire process froze for 15 seconds while GC ran. Your lock had a 10-second TTL, so Redis expired it. Process B immediately grabbed the now-",
+      "credibility": 0.43,
+      "credibility_components": {
+        "domain_score": 0.4,
+        "recency_score": 0.5,
+        "tier": 4.0
+      }
+    },
+    {
+      "url": "https://www.reddit.com/r/programming/comments/1nmzxrf/garbage_collection_gc_pauses_a_stoptheworld_gc",
+      "title": "Garbage Collection (GC) Pauses: A \"stop-the-world\" GC ... - Reddit",
+      "domain": "reddit.com",
+      "published": null,
+      "snippet": "Then, at 2 AM during Black Friday traffic, a single 8-second garbage collection pause freezes your entire checkout flow. Upstream services",
+      "credibility": 0.43,
+      "credibility_components": {
+        "domain_score": 0.4,
+        "recency_score": 0.5,
+        "tier": 4.0
+      }
+    },
+    {
+      "url": "https://access.redhat.com/solutions/19932",
+      "title": "Java garbage collection long pause times - Red Hat Customer Portal",
+      "domain": "access.redhat.com",
+      "published": null,
+      "snippet": "Issue. Very long full garbage collections (GC). Some Full GCs take more than 5 minutes. Minor (young) GCs are taking over 30 seconds.",
+      "credibility": 0.29,
+      "credibility_components": {
+        "domain_score": 0.2,
+        "recency_score": 0.5,
+        "tier": 5.0
+      }
+    },
+    {
+      "url": "https://www.researchgate.net/publication/220439185_Scheduling_Real-Time_Garbage_Collection_on_Uniprocessors",
+      "title": "(PDF) Scheduling Real-Time Garbage Collection on Uniprocessors",
+      "domain": "researchgate.net",
+      "published": null,
+      "snippet": "This article comprehensively compares leading approaches to hard real-time garbage collection. There are many design decisions involved in",
+      "credibility": 0.29,
+      "credibility_components": {
+        "domain_score": 0.2,
+        "recency_score": 0.5,
+        "tier": 5.0
+      }
+    },
+    {
+      "url": "https://www.bohrium.com/en/sciencepedia/feynman/keyword/stop_the_world_gc",
+      "title": "Stop-the-World Garbage Collection | Bohrium",
+      "domain": "bohrium.com",
+      "published": null,
+      "snippet": "Stop-the-World Garbage Collection is a memory reclamation process in computer science that pauses all application execution threads at designated safepoints",
+      "credibility": 0.29,
+      "credibility_components": {
+        "domain_score": 0.2,
+        "recency_score": 0.5,
+        "tier": 5.0
+      }
+    },
+    {
+      "url": "https://github.com/sajidhamdard/system-design/blob/main/notes/distributed-locks.md",
+      "title": "system-design/notes/distributed-locks.md at main - GitHub",
+      "domain": "github.com",
+      "published": null,
+      "snippet": "When to Use Redlock · Preventing two users from buying the last item in stock. · Ensuring only one service runs a scheduled job at a time.",
+      "credibility": 0.43,
+      "credibility_components": {
+        "domain_score": 0.4,
+        "recency_score": 0.5,
+        "tier": 4.0
+      }
+    },
+    {
+      "url": "https://oneuptime.com/blog/post/2026-01-21-nodejs-distributed-locks-redlock/view",
+      "title": "How to Implement Distributed Locks with Redlock in Node.js",
+      "domain": "oneuptime.com",
+      "published": null,
+      "snippet": "Everything you need to get started and succeed. # How to Implement Distributed Locks with Redlock in Node.js. Learn how to implement distributed locks in Node.js using the Redlock algorithm. Distributed locks are essential when multiple instances of your application need to coordinate access to shared resources. The Redlock algorithm, proposed by Redis creator Salvatore Sanfilippo, provides a way to implement distributed locks that remain reliable even when some Redis instances fail. I1->>Redis: Acquire lock (reminder:123). async acquire(resource: string, ttl: number): Promise<Lock | null> {. return this.releaseAll(lock.resource, lock.value);. async extend(lock: Lock, ttl: number): Promise<Lock | null> {. this.clients.map((client) => this.tryExtend(client, lock.resource, lock.value, ttl)). private async tryLock(client: Redis, resource: string, value: string, ttl: number): Promise<boolean> {. private async tryExtend(client: Redis, resource: string, value: string, ttl: number): Promise<boolean> {. this.lock = await this.redlock.acquire(this.resource, this.ttl);. const extended = await this.redlock.extend(this.lock, this.ttl);. const lock = await this.redlock.acquire(resource, ttl);. throw new Error(`Failed to acquire lock for resource: ${resource}`);. for (const lock of locks) {.",
+      "credibility": 0.29,
+      "credibility_components": {
+        "domain_score": 0.2,
+        "recency_score": 0.5,
+        "tier": 5.0
+      }
+    },
+    {
+      "url": "https://medium.com/@moeinkolivand97/complete-guide-to-redis-lock-types-what-they-do-pros-cons-and-real-world-applications-03bfcbc58255",
+      "title": "Complete Guide to Redis Lock Types: What They Do, Pros & Cons ...",
+      "domain": "medium.com",
+      "published": null,
+      "snippet": "Best Use Cases · Nested transactions (database operations calling other operations) · Recursive algorithms (tree traversal with locking at each",
+      "credibility": 0.43,
+      "credibility_components": {
+        "domain_score": 0.4,
+        "recency_score": 0.5,
+        "tier": 4.0
+      }
+    },
+    {
+      "url": "https://engineeringatscale.substack.com/p/redis-distributed-locks-explained",
+      "title": "Redis Locks: Working, Failure Modes and Real-World Examples",
+      "domain": "engineeringatscale.substack.com",
+      "published": null,
+      "snippet": "# Redis Locks: Working, Failure Modes and Real-World Examples. How do reservation systems prevent thousands of concurrent users from booking the same seat? Building such a system is challenging since it needs to handle high throughput, co-ordinate multiple actions (booking, payment, notification, etc) and prevent double booking. At its core, the problem is - *To guarantee mutual exclusion while accessing a shared resource in a distributed system*. Before understanding how distributed locks work, let’s revisit our concurrency fundamentals for a single node system. Let’s say we have a booking system that stores the data in the memory. How do we safely handle two or more requests for the same seat? While locks work for this application, what would happen if the application is now deployed on multiple nodes? Using the same example of a reservation system, each application would try to create and acquire a lock in an external system like database or cache.",
+      "credibility": 0.29,
+      "credibility_components": {
+        "domain_score": 0.2,
+        "recency_score": 0.5,
+        "tier": 5.0
+      }
+    },
+    {
+      "url": "https://blog.stackademic.com/is-redis-distributed-lock-truly-safe-a-deep-dive-into-reliability-part-ii-461605e749cb",
+      "title": "Is Redis Distributed Lock Truly Safe? A Deep Dive into Reliability ...",
+      "domain": "blog.stackademic.com",
+      "published": null,
+      "snippet": "After confirmation, NPC (network, pause, clock-skew) affects every distributed lock; Redlock and Zookeeper alike cannot prevent it. Therefore,",
+      "credibility": 0.29,
+      "credibility_components": {
+        "domain_score": 0.2,
+        "recency_score": 0.5,
+        "tier": 5.0
+      }
+    },
+    {
+      "url": "https://oneuptime.com/blog/post/2026-01-21-redis-distributed-locks/view",
+      "title": "How to Implement Distributed Locks with Redis (Redlock) - OneUptime",
+      "domain": "oneuptime.com",
+      "published": null,
+      "snippet": "A comprehensive guide to implementing distributed locks with Redis using the Redlock algorithm, including lock safety, automatic expiration.",
+      "credibility": 0.29,
+      "credibility_components": {
+        "domain_score": 0.2,
+        "recency_score": 0.5,
+        "tier": 5.0
+      }
+    },
+    {
+      "url": "https://codelit.io/blog/distributed-locking-patterns",
+      "title": "Distributed Locking Patterns: Redis, ZooKeeper, Database Locks ...",
+      "domain": "codelit.io",
+      "published": null,
+      "snippet": "# Distributed Locking Patterns: Redis, ZooKeeper, Database Locks & Beyond. When multiple processes across different machines need to coordinate access to a shared resource, you need a **distributed lock**. This guide covers the most important **distributed locking** patterns, from Redis single-instance locks to ZooKeeper recipes, along with the pitfalls that catch most engineers off guard. ## Why Distributed Locks?#. In a single-process application, a mutex or semaphore is enough. ### SET NX (Single Instance)#. The simplest Redis lock uses a single command:. * **NX** — only set if the key does not exist (acquire). * **unique\\_value** — a UUID so only the holder can release the lock. **Limitation:** If the single Redis instance fails, the lock is lost. 1. Acquire the lock on all N instances with the same key and unique value. * In practice, Redlock works well for **efficiency locks** (preventing duplicate work) but may not be suitable for **correctness locks** (where safety is critical). ## ZooKeeper Locks#.",
+      "credibility": 0.29,
+      "credibility_components": {
+        "domain_score": 0.2,
+        "recency_score": 0.5,
+        "tier": 5.0
+      }
+    }
+  ],
+  "sub_questions": [
+    {
+      "id": 1,
+      "question": "What is the Redlock algorithm and what problem does it solve in distributed systems?",
+      "depth": 0,
+      "parent_id": null,
+      "confidence": 0.72
+    },
+    {
+      "id": 2,
+      "question": "How does the Redlock algorithm work mechanically—what are the key steps and voting/quorum requirements?",
+      "depth": 0,
+      "parent_id": null,
+      "confidence": 0.72
+    },
+    {
+      "id": 3,
+      "question": "What are the known criticisms, limitations, or failure modes of the Redlock algorithm?",
+      "depth": 0,
+      "parent_id": null,
+      "confidence": 0.62
+    },
+    {
+      "id": 4,
+      "question": "What are practical use cases and implementations of Redlock, particularly in Redis?",
+      "depth": 0,
+      "parent_id": null,
+      "confidence": 0.62
+    },
+    {
+      "id": 5,
+      "question": "What are the specific failure scenarios in Redlock when network partitions occur or clock skew exceeds the algorithm's timing assumptions?",
+      "depth": 1,
+      "parent_id": 3,
+      "confidence": 0.0
+    },
+    {
+      "id": 6,
+      "question": "How does garbage collection pausing and process scheduling delay compromise Redlock's mutual exclusion guarantees?",
+      "depth": 1,
+      "parent_id": 3,
+      "confidence": 0.62
+    },
+    {
+      "id": 7,
+      "question": "What are specific real-world use cases and applications where Redlock is deployed (e.g., job scheduling, rate limiting, distributed transactions)?",
+      "depth": 1,
+      "parent_id": 4,
+      "confidence": 0.62
+    },
+    {
+      "id": 8,
+      "question": "What are the operational challenges and failure modes of Redlock in production, including clock skew, network partitions, and lock expiration handling?",
+      "depth": 1,
+      "parent_id": 4,
+      "confidence": 0.58
+    }
+  ],
+  "contradictions": [],
+  "confidence_assessment": "This synthesis addresses all eight sub-questions with varying degrees of completeness. Sub-questions 1, 2, and 4 are well-served by the available sources, which provide clear definitions, mechanical operation details, and implementation examples. Sub-questions 3, 6, 7, and 8 are moderately well-covered, though with some gaps.\n\n**Strengths:** The sources provide solid coverage of Redlock's core mechanism (quorum-based acquisition, token generation, TTL validation), its fundamental purpose (fault tolerance against single-node failures), and practical implementations across multiple languages. The criticisms from Martin Kleppmann and the distinction between efficiency and correctness locks are well-documented. Garbage collection pause vulnerabilities are explicitly addressed with concrete examples.\n\n**Gaps and Limitations:**\n\n1. **Sub-question 5 (Network Partitions and Clock Skew Specifics):** The sources mention clock skew and network partitions as challenges but provide limited technical detail about specific failure scenarios. Source 16 discusses clock skew conceptually but does not detail how it specifically breaks Redlock's timing assumptions. The sources lack concrete examples of how a particular clock skew magnitude (e.g., 500ms drift) would cause lock violations.\n\n2. **Sub-question 6 (GC Pausing Details):** While sources 18, 19, and 22 address GC pauses, the coverage is somewhat anecdotal. Source 18 provides a specific example (15-second pause with 10-second TTL), but the sources do not comprehensively discuss process scheduling delays beyond GC, such as context switching or OS-level preemption.\n\n3. **Sub-question 7 (Specific Real-World Use Cases):** The sources provide only three concrete use cases (inventory management, scheduled jobs, reservation systems). The claim pool lacks detailed case studies or production deployment experiences that would illustrate how Redlock performs at scale or in specific industries.\n\n4. **Sub-question 8 (Operational Challenges in Production):** While the sources identify clock skew, network partitions, and lock expiration as challenges, they provide limited guidance on operational practices for mitigating these issues in production. The sources do not discuss monitoring strategies, fallback mechanisms, or operational best practices.\n\n5. **Missing Technical Depth:** The sources lack discussion of several important topics: (a) the exact timing calculations used to validate lock acquisition (how elapsed time is measured and compared to TTL), (b) the behavior of Redlock under asymmetric network partitions where some nodes are reachable but others are not, (c) the interaction between Redlock and Redis persistence modes (AOF vs. RDB), and (d) the impact of Redis replication lag on lock safety.\n\n6. **Credibility Distribution:** Most sources (indices 0, 1, 4, 5, 6, 12, 13, 15, 16, 20, 21, 22, 24, 26, 27, 28, 29) are tier-5 sources with credibility scores of 0.29, indicating lower reliability. Source 3 (Redis official documentation) has credibility 0.57 but is only lightly cited. The synthesis would benefit from more citations to official Redis documentation or peer-reviewed distributed systems literature.\n\n7. **Contradictions and Nuance:** The sources do not explicitly contradict each other, but they represent different perspectives (implementation-focused vs. criticism-focused) without deep reconciliation. The synthesis presents both views but does not explore the conditions under which each perspective applies.\n\n**Overall Assessment:** The synthesis provides a competent overview of Redlock's definition, mechanism, and known criticisms, suitable for engineers deciding whether to adopt the algorithm. However, the answer lacks the technical depth and production-focused guidance that would be valuable for practitioners implementing Redlock in critical systems. Sub-questions 5 and 8, which address specific failure scenarios and operational challenges, are under-served by the available claim pool."
+}
